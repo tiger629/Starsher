@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Zee5 Live Channels</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(145deg, #f0f4f8, #dfe9f3);
+      color: #222;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    header {
+      text-align: center;
+      padding: 30px 20px 10px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 32px;
+      color: #0072ff;
+    }
+
+    .controls, .categories {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 10px auto 0;
+      padding: 10px 20px;
+      background: rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+      width: calc(100% - 40px);
+      max-width: 900px;
+    }
+
+    .controls input,
+    .controls select {
+      padding: 10px 15px;
+      border-radius: 12px;
+      border: 1px solid #ccc;
+      font-size: 15px;
+      width: 180px;
+      outline: none;
+      background: #fff;
+      color: #333;
+    }
+
+    .categories button {
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: none;
+      background: #e0eafc;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    .categories button.active {
+      background: #0072ff;
+      color: #fff;
+    }
+
+    .channels {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 20px;
+      padding: 20px;
+      width: 100%;
+      max-width: 1200px;
+      margin: auto;
+    }
+
+    .channel {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 20px;
+      overflow: hidden;
+      position: relative;
+      transition: all 0.3s ease;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    .channel:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 12px 20px rgba(0, 114, 255, 0.2);
+    }
+
+    .channel img {
+      width: 100%;
+      height: 110px;
+      object-fit: contain;
+      background: #f5f5f5;
+      border-bottom: 1px solid #eee;
+    }
+
+    .channel-name {
+      padding: 12px;
+      font-size: 15px;
+      text-align: center;
+      font-weight: 500;
+      color: #0072ff;
+    }
+
+    .fav-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 20px;
+      background: transparent;
+      border: none;
+      color: #999;
+      cursor: pointer;
+      z-index: 2;
+    }
+
+    .fav-btn.active {
+      color: #ffca28;
+    }
+
+    a {
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+
+    footer {
+      margin-top: auto;
+      text-align: center;
+      padding: 20px;
+      font-size: 14px;
+      color: #333;
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(6px);
+    }
+
+    footer a {
+      color: #0072ff;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      color: #00bcd4;
+    }
+
+    @media (max-width: 480px) {
+      .controls, .categories {
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .controls input,
+      .controls select {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Zee5 Live Channels</h1>
+  </header>
+
+  <div class="controls">
+    <input type="text" id="searchInput" placeholder="Search channels..." />
+    <select id="sortSelect">
+      <option value="default">Sort by</option>
+      <option value="name">Name</option>
+      <option value="favorites">Favorites</option>
+    </select>
+  </div>
+
+  <div class="categories" id="categoryTabs"></div>
+
+  <div class="channels" id="channelList"></div>
+
+  <footer>
+    Join our Telegram: <a href="https://t.me/IPTV07INDIA" target="_blank">@IPTV07INDIA</a>
+  </footer>
+
+  <script>
+    const playlistUrl = 'https://tv9899.vercel.app/playlist.m3u';
+    const channelList = document.getElementById('channelList');
+    const searchInput = document.getElementById('searchInput');
+    const sortSelect = document.getElementById('sortSelect');
+    const categoryTabs = document.getElementById('categoryTabs');
+
+    let channelsData = [];
+    let currentCategory = "All";
+
+    function getFavorites() {
+      return JSON.parse(localStorage.getItem('favorites')) || [];
+    }
+
+    function toggleFavorite(id) {
+      const favs = getFavorites();
+      const index = favs.indexOf(id);
+      if (index === -1) favs.push(id);
+      else favs.splice(index, 1);
+      localStorage.setItem('favorites', JSON.stringify(favs));
+      renderChannels();
+    }
+
+    function isFavorite(id) {
+      return getFavorites().includes(id);
+    }
+
+    async function loadPlaylist() {
+      try {
+        const res = await fetch(playlistUrl);
+        const text = await res.text();
+        const lines = text.split('\n');
+        channelsData = [];
+
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].startsWith('#KODIPROP:inputstream.adaptive.license_key')) {
+            const info = lines[i + 1];
+            const match = info.match(/tvg-id="([^"]+)" tvg-logo="([^"]+)"(?:.*?group-title="([^"]+)")?.*?,\s*(.*)/);
+            if (match) {
+              const [_, tvgId, logo, groupTitle = "Uncategorized", name] = match;
+              channelsData.push({ tvgId, logo, name, groupTitle });
+            }
+          }
+        }
+
+        renderCategoryTabs();
+        renderChannels();
+      } catch (err) {
+        console.error('Failed to load channels:', err);
+        channelList.innerHTML = `<p style="color: red; text-align:center;">Failed to load channels. Please try again later.</p>`;
+      }
+    }
+
+    function renderCategoryTabs() {
+      const categories = Array.from(new Set(channelsData.map(c => c.groupTitle)));
+      categoryTabs.innerHTML = `<button class="${currentCategory === 'All' ? 'active' : ''}" onclick="setCategory('All')">All</button>`;
+      categories.forEach(cat => {
+        const btn = document.createElement('button');
+        btn.textContent = cat;
+        btn.className = currentCategory === cat ? 'active' : '';
+        btn.onclick = () => setCategory(cat);
+        categoryTabs.appendChild(btn);
+      });
+    }
+
+    function setCategory(cat) {
+      currentCategory = cat;
+      renderCategoryTabs();
+      renderChannels();
+    }
+
+    function renderChannels() {
+      const keyword = searchInput.value.toLowerCase();
+      let filtered = channelsData.filter(c =>
+        c.name.toLowerCase().includes(keyword) &&
+        (currentCategory === 'All' || c.groupTitle === currentCategory)
+      );
+
+      if (sortSelect.value === 'name') {
+        filtered.sort((a, b) => a.name.localeCompare(b.name));
+      } else if (sortSelect.value === 'favorites') {
+        const favs = getFavorites();
+        filtered.sort((a, b) => isFavorite(b.tvgId) - isFavorite(a.tvgId));
+      }
+
+      channelList.innerHTML = '';
+
+      filtered.forEach(({ tvgId, logo, name }) => {
+        const channel = document.createElement('div');
+        channel.className = 'channel';
+        channel.innerHTML = `
+          <button class="fav-btn ${isFavorite(tvgId) ? 'active' : ''}" onclick="toggleFavorite('${tvgId}')">★</button>
+          <a href="play.html?id=${encodeURIComponent(tvgId)}">
+            <img src="${logo}" alt="${name}" />
+            <div class="channel-name">${name}</div>
+          </a>
+        `;
+        channelList.appendChild(channel);
+      });
+    }
+
+    searchInput.addEventListener('input', renderChannels);
+    sortSelect.addEventListener('change', renderChannels);
+
+    loadPlaylist();
+  </script>
+</body>
+  <script>
+  // Disable Right Click
+  document.addEventListener('contextmenu', e => e.preventDefault());
+
+  // Disable DevTools Shortcuts
+  document.addEventListener('keydown', function (e) {
+    if (
+      e.key === 'F12' ||
+      (e.ctrlKey && e.shiftKey && ['I', 'C', 'J'].includes(e.key)) ||
+      (e.ctrlKey && ['U', 'S'].includes(e.key))
+    ) {
+      e.preventDefault();
+      return false;
+    }
+  });
+
+  // Detect DevTools by measuring console open
+  let devtools = { open: false };
+  const threshold = 160;
+  const emitEvent = (state) => {
+    if (state !== devtools.open) {
+      devtools.open = state;
+      if (state) {
+        document.body.innerHTML = '<h1 style="color:red;text-align:center;margin-top:20%;">DevTools is not allowed!</h1>';
+      }
+    }
+  };
+
+  setInterval(function () {
+    const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+    const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+    emitEvent(widthThreshold || heightThreshold);
+  }, 500);
+</script>
+</html>
